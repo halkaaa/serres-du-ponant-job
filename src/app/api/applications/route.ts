@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
 const insertSchema = z.object({
@@ -47,7 +47,6 @@ export async function GET(request: Request) {
 
 // POST /api/applications — Soumettre une candidature
 export async function POST(request: Request) {
-  const supabase = await createClient();
   const body = await request.json();
   const parsed = insertSchema.safeParse(body);
 
@@ -58,7 +57,8 @@ export async function POST(request: Request) {
     );
   }
 
-  // Vérifier que l'offre est publiée
+  // Vérifier que l'offre est publiée (client standard, lecture publique)
+  const supabase = await createClient();
   const { data: job } = await supabase
     .from("jobs")
     .select("id, is_published")
@@ -69,7 +69,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Offre introuvable ou non publiée" }, { status: 404 });
   }
 
-  const { data, error } = await supabase
+  // Insert avec le client admin pour bypasser la RLS (fonctionne connecté ou non)
+  const adminSupabase = await createAdminClient();
+  const { data, error } = await adminSupabase
     .from("applications")
     .insert(parsed.data)
     .select()
