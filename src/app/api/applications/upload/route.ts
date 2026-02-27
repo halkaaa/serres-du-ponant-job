@@ -34,16 +34,18 @@ export async function POST(request: Request) {
     .upload(fileName, buffer, { contentType: file.type, upsert: false });
 
   if (uploadError) {
-    return NextResponse.json({ error: "Erreur lors du téléchargement du CV." }, { status: 500 });
+    console.error("[upload] uploadError:", uploadError);
+    return NextResponse.json({ error: `Erreur upload : ${uploadError.message}` }, { status: 500 });
   }
 
   // URL signée valable 10 ans
-  const { data: signedData } = await supabase.storage
+  const { data: signedData, error: signedError } = await supabase.storage
     .from("resumes")
     .createSignedUrl(fileName, 60 * 60 * 24 * 365 * 10);
 
-  if (!signedData?.signedUrl) {
-    return NextResponse.json({ error: "Impossible de générer le lien du CV." }, { status: 500 });
+  if (signedError || !signedData?.signedUrl) {
+    console.error("[upload] signedError:", signedError);
+    return NextResponse.json({ error: `Erreur signed URL : ${signedError?.message ?? "inconnue"}` }, { status: 500 });
   }
 
   return NextResponse.json({ url: signedData.signedUrl });
