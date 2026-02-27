@@ -1,14 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CheckCircle2, FileText, Loader2, Upload, X } from "lucide-react";
+import { CheckCircle2, FileText, Loader2, Upload, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { applicationSchema, type ApplicationFormValues } from "@/lib/validations";
+import { createClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
 interface ApplicationFormProps {
   jobId: string;
@@ -16,10 +20,17 @@ interface ApplicationFormProps {
 }
 
 export default function ApplicationForm({ jobId, jobTitle }: ApplicationFormProps) {
+  const pathname = usePathname();
+  const [user, setUser] = useState<User | null | undefined>(undefined); // undefined = chargement
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+  }, []);
 
   const {
     register,
@@ -53,7 +64,7 @@ export default function ApplicationForm({ jobId, jobTitle }: ApplicationFormProp
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           job_id:       jobId,
-          candidate_id: null,
+          candidate_id: user?.id ?? null,
           full_name:    values.full_name,
           email:        values.email,
           cover_letter: values.cover_letter ?? null,
@@ -72,6 +83,44 @@ export default function ApplicationForm({ jobId, jobTitle }: ApplicationFormProp
     } finally {
       setLoading(false);
     }
+  }
+
+  // Chargement de la session
+  if (user === undefined) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Non connecté → CTA inscription
+  if (user === null) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-4 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-100">
+          <UserPlus className="h-6 w-6 text-brand-600" />
+        </div>
+        <div>
+          <h3 className="font-semibold">Postuler à cette offre</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Vous devez créer un compte pour pouvoir postuler.
+          </p>
+        </div>
+        <Button asChild className="w-full gap-2">
+          <Link href={`/login?tab=register&redirect=${pathname}`}>
+            <UserPlus className="h-4 w-4" />
+            Créer un compte
+          </Link>
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Déjà un compte ?{" "}
+          <Link href={`/login?redirect=${pathname}`} className="underline hover:text-foreground transition-colors">
+            Se connecter
+          </Link>
+        </p>
+      </div>
+    );
   }
 
   if (submitted) {
