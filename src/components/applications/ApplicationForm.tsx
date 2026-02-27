@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { applicationSchema, type ApplicationFormValues } from "@/lib/validations";
-import { createClient } from "@/lib/supabase/client";
 
 interface ApplicationFormProps {
   jobId: string;
@@ -36,37 +35,29 @@ export default function ApplicationForm({ jobId, jobTitle }: ApplicationFormProp
     setError(null);
 
     try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      // 1. Upload du CV via l'API serveur (fonctionne connecté ou non)
+      const formData = new FormData();
+      formData.append("file", values.cv);
 
-      // 1. Upload du CV dans Supabase Storage
-      const fileExt = values.cv.name.split(".").pop();
-      const fileName = `${user?.id ?? "anon"}/${Date.now()}.${fileExt}`;
+      const uploadRes = await fetch("/api/applications/upload", {
+        method: "POST",
+        body: formData,
+      });
 
-      const { error: uploadError } = await supabase.storage
-        .from("resumes")
-        .upload(fileName, values.cv, { upsert: false });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(uploadData.error ?? "Erreur lors du téléchargement du CV.");
 
-      if (uploadError) throw new Error("Erreur lors du téléchargement du CV.");
-
-      // 2. Récupérer l'URL signée (valable 10 ans)
-      const { data: signedData } = await supabase.storage
-        .from("resumes")
-        .createSignedUrl(fileName, 60 * 60 * 24 * 365 * 10);
-
-      if (!signedData?.signedUrl) throw new Error("Impossible de générer le lien du CV.");
-
-      // 3. Créer la candidature
+      // 2. Créer la candidature
       const res = await fetch("/api/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          job_id:        jobId,
-          candidate_id:  user?.id ?? null,
-          full_name:     values.full_name,
-          email:         values.email,
-          cover_letter:  values.cover_letter ?? null,
-          cv_url:        signedData.signedUrl,
+          job_id:       jobId,
+          candidate_id: null,
+          full_name:    values.full_name,
+          email:        values.email,
+          cover_letter: values.cover_letter ?? null,
+          cv_url:       uploadData.url,
         }),
       });
 
