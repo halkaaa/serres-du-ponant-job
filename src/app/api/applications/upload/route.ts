@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 
 const ALLOWED_TYPES = [
   "application/pdf",
@@ -23,7 +23,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Fichier trop volumineux (max 5 Mo)." }, { status: 400 });
   }
 
-  const supabase = await createAdminClient();
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
 
   const fileExt = file.name.split(".").pop();
   const fileName = `uploads/${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
